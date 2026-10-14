@@ -13,7 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ota_update/ota_update.dart';
 
 // Versión local de la aplicación
-const String kAppVersion = "1.5.5";
+const String kAppVersion = "1.5.6";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
