@@ -13,7 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ota_update/ota_update.dart';
 
 // Versión local de la aplicación
-const String kAppVersion = "1.5.3";
+const String kAppVersion = "1.5.5";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -219,8 +219,9 @@ Future<void> exportarReporteExcel({
       TextCellValue('CÓD. VENDEDOR'),
       TextCellValue('VENDEDOR'),
       TextCellValue('PRODUCTOS'),
-      TextCellValue('CAJAS'),
-      TextCellValue('BARRAS'),
+      TextCellValue('UNIDADES'),
+      TextCellValue('CAJAS SOE'),
+      TextCellValue('BULTOS KABELLITOS'),
       TextCellValue('TOTAL (\$)'),
     ]);
 
@@ -245,8 +246,9 @@ Future<void> exportarReporteExcel({
         TextCellValue(data['vendedor_codigo']?.toString() ?? 'N/A'),
         TextCellValue(data['vendedor']?.toString() ?? 'N/A'),
         TextCellValue(productosTexto),
-        TextCellValue(data['total_cajas']?.toString() ?? '0'),
-        TextCellValue(data['total_barras']?.toString() ?? '0'),
+        TextCellValue(data['total_barras']?.toString() ?? data['total_unidades']?.toString() ?? '0'),
+        TextCellValue(data['total_cajas_soe']?.toString() ?? data['total_cajas']?.toString() ?? '0'),
+        TextCellValue(data['total_bultos_kabellitos']?.toString() ?? '0'),
         TextCellValue(data['total_pagar']?.toString() ?? '0'),
       ]);
     }
@@ -370,7 +372,7 @@ Future<void> exportarRankingVendedores(BuildContext context) async {
       String codigo = data['vendedor_codigo']?.toString() ?? 'Sin_codigo';
       String nombre = data['vendedor']?.toString() ?? 'Sin_nombre';
       double totalPagar = (data['total_pagar'] as num?)?.toDouble() ?? 0.0;
-      int barras = (data['total_barras'] as num?)?.toInt() ?? 0;
+      int unidades = (data['total_barras'] ?? data['total_unidades'] as num?)?.toInt() ?? 0;
       int cajas = (data['total_cajas'] as num?)?.toInt() ?? 0;
 
       if (!metricasVendedor.containsKey(codigo)) {
@@ -378,14 +380,14 @@ Future<void> exportarRankingVendedores(BuildContext context) async {
           'nombre': nombre,
           'total_dinero': 0.0,
           'total_pedidos': 0,
-          'total_barras': 0,
+          'total_unidades': 0,
           'total_cajas': 0,
         };
       }
 
       metricasVendedor[codigo]!['total_dinero'] += totalPagar;
       metricasVendedor[codigo]!['total_pedidos'] += 1;
-      metricasVendedor[codigo]!['total_barras'] += barras;
+      metricasVendedor[codigo]!['total_unidades'] += unidades;
       metricasVendedor[codigo]!['total_cajas'] += cajas;
     }
 
@@ -402,8 +404,8 @@ Future<void> exportarRankingVendedores(BuildContext context) async {
       TextCellValue('CÓDIGO'),
       TextCellValue('TOTAL FACTURADO (\$)'),
       TextCellValue('N° PEDIDOS'),
-      TextCellValue('TOTAL CAJAS'),
-      TextCellValue('TOTAL BARRAS'),
+      TextCellValue('TOTAL CAJAS / BULTOS'),
+      TextCellValue('TOTAL UNIDADES'),
     ]);
 
     int pos = 1;
@@ -416,7 +418,7 @@ Future<void> exportarRankingVendedores(BuildContext context) async {
         TextCellValue((v['total_dinero'] as double).toStringAsFixed(2)),
         TextCellValue(v['total_pedidos'].toString()),
         TextCellValue(v['total_cajas'].toString()),
-        TextCellValue(v['total_barras'].toString()),
+        TextCellValue(v['total_unidades'].toString()),
       ]);
       pos++;
     }
@@ -512,7 +514,7 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Verificación remota omitida (modo offline): $e");
+      debugPrint("Verificación remota omitida: $e");
     }
 
     try {
@@ -574,8 +576,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SnackBar(content: Text('Permiso denegado para instalar aplicaciones')),
                 );
                 break;
-              case OtaStatus.INTERNAL_ERROR:
-              case OtaStatus.DOWNLOAD_ERROR:
               default:
                 _descargandoActualizacion = false;
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -694,10 +694,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error de conexión: $e'),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text('Error de conexión: $e'), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _cargando = false);
@@ -917,10 +914,7 @@ class _LoginScreenState extends State<LoginScreen> {
 // PANTALLA: TÉRMINOS LEGALES Y CONFIDENCIALIDAD
 // ==========================================
 class TerminosCondicionesScreen extends StatefulWidget {
-  final String docIdUsuario;
-  final String nombreUsuario;
-  final String codigoUsuario;
-  final String rolUsuario;
+  final String docIdUsuario, nombreUsuario, codigoUsuario, rolUsuario;
 
   const TerminosCondicionesScreen({
     super.key,
@@ -1052,14 +1046,13 @@ class _TerminosCondicionesScreenState extends State<TerminosCondicionesScreen> {
                       '1. PROPIEDAD Y OBJETO DEL SISTEMA\n'
                       'Esta aplicación móvil y sus bases de datos son propiedad exclusiva de SOE Cosméticos. Su uso está estrictamente reservado para fines de gestión comercial autorizada. Queda terminantemente prohibido su uso personal, derivado o ajeno a las actividades comerciales encomendadas.\n\n'
                       '2. SECRETO COMERCIAL Y PROTECCIÓN DE DATOS\n'
-                      'El usuario reconoce expresamente que toda la información accesible a través de esta aplicación —incluyendo sin limitación: nombres de clientes, registros de RIF, direcciones, números de contacto, historiales de compra, volúmenes de venta, condiciones crediticias, catálogo y políticas de precios— constituye Secreto Comercial e Información Confidencial de SOE Cosméticos.\n\n'
-                      'Queda expresamente prohibida la copia, reproducción, captura sistemática, extracción masiva, transferencia a terceros, comercialización o utilización de dicha información en beneficio propio o de terceros ajenos a la empresa. Dicha conducta acarreará responsabilidades civiles y penales con base en la Ley Especial Contra los Delitos Informáticos y normativas vigentes sobre competencia desleal.\n\n'
+                      'El usuario reconoce expresamente que toda la información accesible a través de esta aplicación constituye Secreto Comercial e Información Confidencial de SOE Cosméticos.\n\n'
                       '3. CUSTODIA Y RESPONSABILIDAD DE CREDENCIALES\n'
-                      'El código de usuario y la contraseña asignados son de uso personal e intransferible. El usuario asume plena responsabilidad por todas las transacciones, modificaciones de datos y pedidos cargados bajo sus credenciales. En caso de extravío, sustracción del dispositivo móvil o sospecha de acceso no autorizado, el usuario debe notificar inmediatamente a Administración.\n\n'
+                      'El código de usuario y la contraseña asignados son de uso personal e intransferible.\n\n'
                       '4. NATURALEZA PROVISIONAL DE LOS PEDIDOS\n'
-                      'Los pedidos generados mediante la aplicación corresponden exclusivamente a órdenes de preventa y notas de entrega provisionales. La formalización definitiva, asignación de inventario y despacho están sujetas a la validación de crédito y conciliación de cobranza por parte del departamento administrativo de SOE Cosméticos.\n\n'
+                      'Los pedidos generados corresponden a órdenes de preventa sujetas a validación de crédito.\n\n'
                       '5. REGISTRO Y AUDITORÍA DE ACTIVIDADES\n'
-                      'El usuario consiente de forma expresa que sus accesos, pedidos emitidos, modificaciones de estatus y hora exacta de operaciones quedan almacenados en registros de auditoría inmutables para fines de seguridad operativa y control contable.',
+                      'Las operaciones quedan almacenadas en registros de auditoría inmutables.',
                       style: TextStyle(fontSize: 12.5, height: 1.45, color: Colors.black87),
                     ),
                   ),
@@ -1114,9 +1107,7 @@ class _TerminosCondicionesScreenState extends State<TerminosCondicionesScreen> {
 // PANTALLA: PANEL ADMINISTRATIVO / DESARROLLADOR
 // ==========================================
 class AdminDashboardScreen extends StatelessWidget {
-  final String nombreUsuario;
-  final String codigoUsuario;
-  final String rolUsuario;
+  final String nombreUsuario, codigoUsuario, rolUsuario;
 
   const AdminDashboardScreen({
     super.key,
@@ -1416,7 +1407,7 @@ class AdminDashboardScreen extends StatelessWidget {
 }
 
 // ==========================================
-// PANTALLA: CONTROL DE PEDIDOS Y PAGOS (CON FILTRO DE VISIBILIDAD)
+// PANTALLA: CONTROL DE PEDIDOS Y PAGOS
 // ==========================================
 class GestionPedidosScreen extends StatefulWidget {
   const GestionPedidosScreen({super.key});
@@ -2026,9 +2017,7 @@ class _GestionUsuariosScreenState extends State<GestionUsuariosScreen> {
 // PANTALLA 1: FORMULARIO DEL CLIENTE
 // ==========================================
 class FormularioScreen extends StatefulWidget {
-  final String nombreUsuario;
-  final String codigoUsuario;
-  final String rolUsuario;
+  final String nombreUsuario, codigoUsuario, rolUsuario;
 
   const FormularioScreen({
     super.key,
@@ -2480,7 +2469,7 @@ class _FormularioScreenState extends State<FormularioScreen> {
                 onPressed: _validandoCliente ? null : _procesarYContinuar,
                 child: _validandoCliente
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('IR AL CATÁLOGO SOE', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    : const Text('IR AL CATÁLOGO', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 10),
               OutlinedButton.icon(
@@ -2501,7 +2490,7 @@ class _FormularioScreenState extends State<FormularioScreen> {
 }
 
 // ==========================================
-// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS
+// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS (MULTIMARCA + HOTELERÍA)
 // ==========================================
 class CatalogoScreen extends StatefulWidget {
   final String codigoCliente, cliente, rif, direccion, observaciones, vendedor, vendedorCodigo, rolUsuario;
@@ -2525,21 +2514,46 @@ class CatalogoScreen extends StatefulWidget {
 class _CatalogoScreenState extends State<CatalogoScreen> {
   Map<Producto, int> carrito = {};
   bool generandoPDF = false;
+  String _marcaFiltro = 'Todos';
 
-  int get totalJabones {
+  List<Producto> get productosFiltrados {
+    if (_marcaFiltro == 'Todos') return catalogoSoe;
+    return catalogoSoe.where((p) => p.marca == _marcaFiltro).toList();
+  }
+
+  int get totalUnidades {
     int total = 0;
-    for (var cantidad in carrito.values) { total += cantidad; }
+    for (var cantidad in carrito.values) {
+      total += cantidad;
+    }
     return total;
+  }
+
+  int get totalCajasSoe {
+    int u = 0;
+    carrito.forEach((p, cant) {
+      if (p.marca == 'SOE') u += cant;
+    });
+    return (u / 36).ceil();
+  }
+
+  int get totalBultosKabellitos {
+    int u = 0;
+    carrito.forEach((p, cant) {
+      if (p.marca == 'Kabellitos') u += cant;
+    });
+    return (u / 12).ceil();
   }
 
   double get totalPagar {
     double total = 0;
-    carrito.forEach((producto, cantidad) { total += producto.precio * cantidad; });
+    carrito.forEach((producto, cantidad) {
+      total += producto.precio * cantidad;
+    });
     return total;
   }
 
   Future<void> _generarYCompartirPDF() async {
-    // 1. Bloqueo inmediato para impedir doble toque
     if (generandoPDF) return;
 
     setState(() => generandoPDF = true);
@@ -2585,26 +2599,31 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                 pw.SizedBox(height: 10),
 
                 pw.TableHelper.fromTextArray(
-                  headers: ['Producto', 'Cant.', 'Precio U.', 'Subtotal'],
+                  headers: ['Producto', 'Línea', 'Cant.', 'Precio U.', 'Subtotal'],
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                   headerDecoration: const pw.BoxDecoration(color: PdfColors.pink),
                   data: carrito.entries.map((e) => [
                     e.key.nombre,
+                    e.key.marca,
                     e.value.toString(),
                     '\$${e.key.precio.toStringAsFixed(2)}',
                     '\$${(e.key.precio * e.value).toStringAsFixed(2)}'
                   ]).toList(),
                 ),
 
-                pw.SizedBox(height: 20),
+                pw.SizedBox(height: 18),
                 pw.Align(
                   alignment: pw.Alignment.centerRight,
                   child: pw.Text('TOTAL A PAGAR: \$${totalPagar.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                 ),
-                pw.SizedBox(height: 20),
-                pw.Text('TOTAL BARRAS: $totalJabones', style: pw.TextStyle(fontSize: 14)),
+                pw.SizedBox(height: 15),
+                pw.Text('DESGLOSE LOGÍSTICO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                 pw.SizedBox(height: 4),
-                pw.Text('TOTAL CAJAS (36 und): ${(totalJabones / 36).ceil()}', style: pw.TextStyle(fontSize: 14)),
+                pw.Text('• Total Unidades: $totalUnidades', style: const pw.TextStyle(fontSize: 11)),
+                if (totalCajasSoe > 0)
+                  pw.Text('• Cajas SOE (36 und): $totalCajasSoe', style: const pw.TextStyle(fontSize: 11)),
+                if (totalBultosKabellitos > 0)
+                  pw.Text('• Bultos Kabellitos (12 und / docena): $totalBultosKabellitos', style: const pw.TextStyle(fontSize: 11)),
               ],
             );
           },
@@ -2619,6 +2638,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
       carrito.forEach((producto, cantidad) {
         listaProductos.add({
           'nombre': producto.nombre,
+          'marca': producto.marca,
           'cantidad': cantidad,
           'precio': producto.precio,
           'subtotal': cantidad * producto.precio,
@@ -2636,20 +2656,21 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
         'vendedor': widget.vendedor,
         'vendedor_codigo': widget.vendedorCodigo,
         'total_pagar': totalPagar,
-        'total_barras': totalJabones,
-        'total_cajas': (totalJabones / 36).ceil(),
+        'total_barras': totalUnidades,
+        'total_unidades': totalUnidades,
+        'total_cajas_soe': totalCajasSoe,
+        'total_bultos_kabellitos': totalBultosKabellitos,
+        'total_cajas': totalCajasSoe + totalBultosKabellitos,
         'estatus': 'Procesado',
         'fecha': FieldValue.serverTimestamp(),
         'productos': listaProductos,
       });
 
-      // 2. Compartir archivo en WhatsApp
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'Adjunto pedido $numeroPedido de ${widget.cliente}',
       );
 
-      // 3. Vaciar carrito, limpiar estado y regresar de la pantalla
       if (mounted) {
         setState(() {
           carrito.clear();
@@ -2678,6 +2699,8 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final listaActual = productosFiltrados;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Inventario', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -2699,152 +2722,290 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
           ),
         ],
       ),
-      body: ListView.builder(
-        itemCount: catalogoSoe.length,
-        itemBuilder: (context, index) {
-          final producto = catalogoSoe[index];
-          final cantidad = carrito[producto] ?? 0;
-
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
+      body: Column(
+        children: [
+          // BARRA SUPERIOR DE FILTRO POR LÍNEA DE PRODUCTO
+          Container(
+            color: Colors.grey.shade100,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(producto.nombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        Text(producto.categoria, style: TextStyle(color: Colors.pink.shade700, fontSize: 11)),
-                        Text('\$${producto.precio.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.green)),
-                      ],
-                    ),
+                  ChoiceChip(
+                    label: const Text('Todos'),
+                    selected: _marcaFiltro == 'Todos',
+                    selectedColor: Colors.pink.shade100,
+                    onSelected: (val) {
+                      if (val) setState(() => _marcaFiltro = 'Todos');
+                    },
                   ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                        onPressed: cantidad > 0 ? () {
-                          setState(() {
-                            carrito[producto] = cantidad - 1;
-                            if (carrito[producto] == 0) carrito.remove(producto);
-                          });
-                        } : null,
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          TextEditingController controller = TextEditingController(
-                            text: cantidad > 0 ? cantidad.toString() : '',
-                          );
-                          showDialog(
-                            context: context,
-                            builder: (context) {
-                              return AlertDialog(
-                                title: const Text('Ingresar cantidad'),
-                                content: TextField(
-                                  controller: controller,
-                                  keyboardType: TextInputType.number,
-                                  autofocus: true,
-                                  decoration: const InputDecoration(
-                                    hintText: "Ej: 50",
-                                    border: OutlineInputBorder(),
-                                  ),
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(context),
-                                    child: const Text('Cancelar'),
-                                  ),
-                                  ElevatedButton(
-                                    onPressed: () {
-                                      int nuevaCantidad = int.tryParse(controller.text) ?? 0;
-                                      setState(() {
-                                        if (nuevaCantidad > 0) {
-                                          carrito[producto] = nuevaCantidad;
-                                        } else {
-                                          carrito.remove(producto);
-                                        }
-                                      });
-                                      Navigator.pop(context);
-                                    },
-                                    child: const Text('Aceptar'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '$cantidad',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                        onPressed: () => setState(() => carrito[producto] = cantidad + 1),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('SOE Cosméticos'),
+                    selected: _marcaFiltro == 'SOE',
+                    selectedColor: Colors.pink.shade100,
+                    onSelected: (val) {
+                      if (val) setState(() => _marcaFiltro = 'SOE');
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('Kabellitos'),
+                    selected: _marcaFiltro == 'Kabellitos',
+                    selectedColor: Colors.purple.shade100,
+                    onSelected: (val) {
+                      if (val) setState(() => _marcaFiltro = 'Kabellitos');
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  ChoiceChip(
+                    label: const Text('🏨 Hotelería'),
+                    selected: _marcaFiltro == 'Hotelería',
+                    selectedColor: Colors.teal.shade100,
+                    onSelected: (val) {
+                      if (val) setState(() => _marcaFiltro = 'Hotelería');
+                    },
                   ),
                 ],
               ),
             ),
-          );
-        },
-      ),
-      bottomNavigationBar: totalJabones > 0 ? SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  offset: Offset(0, -3),
-                )
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Barras: $totalJabones', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                    Text('Total: \$${totalPagar.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green)),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: totalJabones >= 12 ? Colors.green : Colors.grey,
-                    minimumSize: const Size(double.infinity, 50),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  onPressed: totalJabones >= 12 && !generandoPDF ? _generarYCompartirPDF : null,
-                  child: generandoPDF
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
-                          totalJabones >= 12 ? 'GENERAR PDF Y ENVIAR' : 'Faltan ${12 - totalJabones} jabones (Min. 12)',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                ),
-              ],
-            ),
           ),
-        ),
-      ) : null,
+
+          // LISTA DE PRODUCTOS O VISTA DE ESPERA PARA HOTELERÍA
+          Expanded(
+            child: listaActual.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _marcaFiltro == 'Hotelería' ? Icons.hotel : Icons.inventory_2_outlined,
+                            size: 64,
+                            color: Colors.grey.shade400,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            _marcaFiltro == 'Hotelería'
+                                ? 'LÍNEA HOTELERA EN PREPARACIÓN'
+                                : 'No hay productos disponibles en esta sección',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          if (_marcaFiltro == 'Hotelería')
+                            const Text(
+                              'Próximamente disponible para pedidos institucionales.',
+                              style: TextStyle(fontSize: 13, color: Colors.grey),
+                              textAlign: TextAlign.center,
+                            ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: listaActual.length,
+                    itemBuilder: (context, index) {
+                      final producto = listaActual[index];
+                      final cantidad = carrito[producto] ?? 0;
+                      bool esKabellitos = producto.marca == 'Kabellitos';
+
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: esKabellitos ? Colors.purple.shade50 : Colors.pink.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            producto.marca,
+                                            style: TextStyle(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                              color: esKabellitos ? Colors.purple.shade700 : Colors.pink.shade700,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          producto.categoria,
+                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 11),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      producto.nombre,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                    ),
+                                    Text(
+                                      '\$${producto.precio.toStringAsFixed(2)} / und (Bulto: ${producto.unidadesPorBulto}u)',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                    onPressed: cantidad > 0
+                                        ? () {
+                                            setState(() {
+                                              carrito[producto] = cantidad - 1;
+                                              if (carrito[producto] == 0) carrito.remove(producto);
+                                            });
+                                          }
+                                        : null,
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      TextEditingController controller = TextEditingController(
+                                        text: cantidad > 0 ? cantidad.toString() : '',
+                                      );
+                                      showDialog(
+                                        context: context,
+                                        builder: (context) {
+                                          return AlertDialog(
+                                            title: Text(producto.nombre),
+                                            content: TextField(
+                                              controller: controller,
+                                              keyboardType: TextInputType.number,
+                                              autofocus: true,
+                                              decoration: InputDecoration(
+                                                labelText: 'Cantidad de unidades',
+                                                hintText: 'Ej: ${producto.unidadesPorBulto}',
+                                                helperText: '1 bulto = ${producto.unidadesPorBulto} unidades',
+                                                border: const OutlineInputBorder(),
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () => Navigator.pop(context),
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              ElevatedButton(
+                                                onPressed: () {
+                                                  int nuevaCantidad = int.tryParse(controller.text) ?? 0;
+                                                  setState(() {
+                                                    if (nuevaCantidad > 0) {
+                                                      carrito[producto] = nuevaCantidad;
+                                                    } else {
+                                                      carrito.remove(producto);
+                                                    }
+                                                  });
+                                                  Navigator.pop(context);
+                                                },
+                                                child: const Text('Aceptar'),
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      );
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '$cantidad',
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                    onPressed: () => setState(() => carrito[producto] = cantidad + 1),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: totalUnidades > 0
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 10,
+                        offset: Offset(0, -3),
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Unidades: $totalUnidades', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                          Text('Total: \$${totalPagar.toStringAsFixed(2)}', style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.green)),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            totalCajasSoe > 0 ? 'SOE: $totalCajasSoe caja(s)' : '',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                          ),
+                          Text(
+                            totalBultosKabellitos > 0 ? 'Kabellitos: $totalBultosKabellitos bulto(s)' : '',
+                            style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          minimumSize: const Size(double.infinity, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: !generandoPDF ? _generarYCompartirPDF : null,
+                        child: generandoPDF
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                'GENERAR PEDIDO Y PDF',
+                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          : null,
     );
   }
 }
