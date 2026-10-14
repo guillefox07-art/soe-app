@@ -23,9 +23,18 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("soe_key.jks")
+            storePassword = "soe123456"
+            keyAlias = "soe_key"
+            keyPassword = "soe123456"
+        }
+    }
+
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 }
