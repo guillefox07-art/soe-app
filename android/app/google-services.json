@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "822787207011",
+    "firebase_url": "https://soe-cosmeticos-default-rtdb.firebaseio.com",
+    "project_id": "soe-cosmeticos",
+    "storage_bucket": "soe-cosmeticos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:822787207011:android:403933ab204bb6c5bcad56",
+        "android_client_info": {
+          "package_name": "com.example.soe_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzUZ7YBAUMgG-iuMhXqzoqyfKEJI-iC9M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
