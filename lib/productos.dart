@@ -4,7 +4,8 @@ class Producto {
   final double precio;
   final String descripcion;
   final String marca; // 'SOE', 'Kabellitos', 'Hotelería'
-  final int unidadesPorBulto; // 36 para SOE, 12 para Kabellitos
+  final int unidadesPorBulto; // 36 para SOE, 12 para Kabellitos, 1 para Hotelería
+  final String nombreDespacho; // Nombre técnico detallado para Despacho y PDF
 
   Producto({
     required this.nombre,
@@ -13,15 +14,15 @@ class Producto {
     required this.descripcion,
     this.marca = 'SOE',
     this.unidadesPorBulto = 36,
-  });
+    String? nombreDespacho,
+  }) : nombreDespacho = nombreDespacho ?? "$nombre ($categoria)";
 }
 
-// Catálogo General Unificado
 final List<Producto> catalogoSoe = [
   // ==========================================
-  // LÍNEA SOE COSMÉTICOS (Cajas de 36 unidades)
+  // 1. LÍNEA SOE COSMÉTICOS (Cajas de 36 unidades)
   // ==========================================
-  // 1. Cuidado Especial y Sensible ($1.50)
+  // Cuidado Especial y Sensible ($1.50)
   Producto(
     nombre: 'Aurora (Onco Vita)',
     categoria: 'Cuidado Especial',
@@ -29,6 +30,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '90g. pH neutro, sin fragancia, con aceites esenciales.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Aurora (Onco Vita) 90g — Cuidado Especial',
   ),
   Producto(
     nombre: 'Sábila y Glicerina',
@@ -37,6 +39,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Hidratación profunda, sin fragancia.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Sábila y Glicerina 100g — Cuidado Especial',
   ),
   Producto(
     nombre: 'Glicerina',
@@ -45,9 +48,10 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. pH neutro, ideal para piel seca y sensible.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Glicerina Pura 100g — Cuidado Especial',
   ),
 
-  // 2. Uso Diario y Humectantes ($0.90)
+  // Uso Diario y Humectantes ($0.90)
   Producto(
     nombre: 'Floralis',
     categoria: 'Uso Diario',
@@ -55,6 +59,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Aroma delicado floral, acción humectante.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Floralis 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Almendras',
@@ -63,6 +68,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Aroma suave y natural, máxima humectación.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Almendras 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Coco',
@@ -71,6 +77,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Aroma tropical, limpieza profunda y humectante.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Coco 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Avena Clásica',
@@ -79,6 +86,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Limpieza profunda con suave fragancia natural.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Avena Clásica 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Rosas',
@@ -87,6 +95,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Aroma floral y delicado, acción humectante.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Rosas 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Blossom',
@@ -95,6 +104,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Máxima hidratación con fragancia floral.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Blossom 100g — Uso Diario',
   ),
   Producto(
     nombre: 'Bebé',
@@ -103,9 +113,10 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Máxima hidratación con fragancia bebé.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Bebé 100g — Uso Diario',
   ),
 
-  // 3. Tratamiento Facial ($1.50)
+  // Tratamiento Facial ($1.50)
   Producto(
     nombre: 'Carbón Activo',
     categoria: 'Tratamiento Facial',
@@ -113,6 +124,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Detox, minimiza poros, seboregulador, sin fragancia.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Carbón Activo 100g — Facial Detox',
   ),
   Producto(
     nombre: 'Concha de Nácar',
@@ -121,9 +133,10 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Aclarante, iluminador, exfoliante suave, sin fragancia.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Concha de Nácar 100g — Facial Aclarante',
   ),
 
-  // 4. Línea Antibacterial ($1.10)
+  // Línea Antibacterial ($1.10)
   Producto(
     nombre: 'Avena Antibacterial',
     categoria: 'Antibacterial',
@@ -131,6 +144,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Base vegetal, niacinamida, protección y regeneración.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Avena Antibacterial 100g — Antibacterial',
   ),
   Producto(
     nombre: 'Natural Antibacterial',
@@ -139,6 +153,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Base vegetal, niacinamida, sin fragancia.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Natural Antibacterial 100g — Antibacterial',
   ),
   Producto(
     nombre: 'Fresh Antibacterial',
@@ -147,6 +162,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Base vegetal, niacinamida, efecto ultra refrescante.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'Fresh Antibacterial 100g — Antibacterial',
   ),
   Producto(
     nombre: 'The Boss Antibacterial',
@@ -155,9 +171,10 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Base vegetal, niacinamida, cuidado masculino.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'The Boss Antibacterial 100g — Antibacterial',
   ),
 
-  // 5. Línea The Boss ($0.90)
+  // Línea The Boss ($0.90)
   Producto(
     nombre: 'The Boss (Clásico)',
     categoria: 'The Boss',
@@ -165,6 +182,7 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Fragancia masculina, limpieza profunda y afeitado suave.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'The Boss Clásico 100g — Masculino',
   ),
   Producto(
     nombre: 'The Boss 2 en 1 Energy',
@@ -173,10 +191,11 @@ final List<Producto> catalogoSoe = [
     descripcion: '100g. Ducha y afeitado, energía para el hombre.',
     marca: 'SOE',
     unidadesPorBulto: 36,
+    nombreDespacho: 'The Boss 2 en 1 Energy 100g — Masculino',
   ),
 
   // ==========================================
-  // LÍNEA KABELLITOS (Bultos de 12 unidades / Docena)
+  // 2. LÍNEA KABELLITOS (Bultos de 12 unidades / Docena)
   // ==========================================
   Producto(
     nombre: 'Kabellitos Colonia',
@@ -185,6 +204,7 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Fragancia infantil suave y fresca. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Colonia — Cuidado Infantil (Docena)',
   ),
   Producto(
     nombre: 'Kabellitos Shampoo',
@@ -193,6 +213,7 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Fórmula suave para niños. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Shampoo — Cuidado Infantil (Docena)',
   ),
   Producto(
     nombre: 'Kabellitos Shampoo Antipiojos',
@@ -201,6 +222,7 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Tratamiento y prevención eficaz. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Shampoo Antipiojos — Cuidado Infantil (Docena)',
   ),
   Producto(
     nombre: 'Kabellitos Crema de Peinar',
@@ -209,6 +231,7 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Desenredo fácil y brillo natural. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Crema de Peinar — Cuidado Infantil (Docena)',
   ),
   Producto(
     nombre: 'Kabellitos Crema Anti Pañalitis',
@@ -217,6 +240,7 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Protección y alivio dérmico para bebés. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Crema Anti Pañalitis — Cuidado Infantil (Docena)',
   ),
   Producto(
     nombre: 'Kabellitos Jabón Hipoalergénico',
@@ -225,10 +249,62 @@ final List<Producto> catalogoSoe = [
     descripcion: 'Limpieza suave para piel delicada. Bulto de 12 unidades.',
     marca: 'Kabellitos',
     unidadesPorBulto: 12,
+    nombreDespacho: 'Kabellitos Jabón Hipoalergénico — Cuidado Infantil (Docena)',
   ),
 
   // ==========================================
-  // LÍNEA HOTELERÍA (Línea Institucional)
+  // 3. LÍNEA HOTELERÍA (Institucional / Amenities)
   // ==========================================
-  // Espacio reservado para los productos hoteleros
-];
+  // Jabones Rectangulares
+  Producto(
+    nombre: 'Jabón SOE Hotel 10g',
+    categoria: 'Jabones Rectangulares',
+    precio: 0.18,
+    descripcion: '10g rectangular. Empaque individual hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 10g — Rectangular',
+  ),
+  Producto(
+    nombre: 'Jabón SOE Hotel 15g',
+    categoria: 'Jabones Rectangulares',
+    precio: 0.25,
+    descripcion: '15g rectangular. Empaque individual hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 15g — Rectangular',
+  ),
+  Producto(
+    nombre: 'Jabón SOE Hotel 20g',
+    categoria: 'Jabones Rectangulares',
+    precio: 0.34,
+    descripcion: '20g rectangular. Empaque individual hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 20g — Rectangular',
+  ),
+  Producto(
+    nombre: 'Jabón SOE Hotel 30g',
+    categoria: 'Jabones Rectangulares',
+    precio: 0.45,
+    descripcion: '30g rectangular. Empaque individual hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 30g — Rectangular',
+  ),
+  Producto(
+    nombre: 'Jabón SOE Hotel 50g',
+    categoria: 'Jabones Rectangulares',
+    precio: 0.57,
+    descripcion: '50g rectangular. Empaque individual hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 50g — Rectangular',
+  ),
+
+  // Jabones Redondos
+  Producto(
+    nombre: 'Jabón SOE Redondo Hotel 20g',
+    categoria: 'Jabones Redondos',
+    precio: 0.34,
+    descripcion: '20g redondo. Presentación

@@ -13,7 +13,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ota_update/ota_update.dart';
 
 // Versión local de la aplicación
-const String kAppVersion = "1.5.6";
+const String kAppVersion = "1.5.7";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,7 +90,7 @@ void confirmarSalidaApp(BuildContext context) {
   );
 }
 
-// Comparador semántico de versiones (ej: 1.5.2 < 1.5.3)
+// Comparador semántico de versiones
 bool esVersionMenor(String versionActual, String versionRequerida) {
   try {
     List<int> parseV(String v) => v.split('.').map((e) => int.tryParse(e) ?? 0).toList();
@@ -219,7 +219,7 @@ Future<void> exportarReporteExcel({
       TextCellValue('CÓD. VENDEDOR'),
       TextCellValue('VENDEDOR'),
       TextCellValue('PRODUCTOS'),
-      TextCellValue('UNIDADES'),
+      TextCellValue('TOTAL UNIDADES'),
       TextCellValue('CAJAS SOE'),
       TextCellValue('BULTOS KABELLITOS'),
       TextCellValue('TOTAL (\$)'),
@@ -231,7 +231,7 @@ Future<void> exportarReporteExcel({
 
       List<dynamic> productosLista = (data['productos'] as List<dynamic>?) ?? [];
       String productosTexto = productosLista
-          .map((p) => "${p['nombre']} (x${p['cantidad']})")
+          .map((p) => "${p['nombre_despacho'] ?? p['nombre']} (x${p['cantidad']})")
           .join(" | ");
 
       sheet.appendRow([
@@ -246,7 +246,7 @@ Future<void> exportarReporteExcel({
         TextCellValue(data['vendedor_codigo']?.toString() ?? 'N/A'),
         TextCellValue(data['vendedor']?.toString() ?? 'N/A'),
         TextCellValue(productosTexto),
-        TextCellValue(data['total_barras']?.toString() ?? data['total_unidades']?.toString() ?? '0'),
+        TextCellValue(data['total_unidades']?.toString() ?? data['total_barras']?.toString() ?? '0'),
         TextCellValue(data['total_cajas_soe']?.toString() ?? data['total_cajas']?.toString() ?? '0'),
         TextCellValue(data['total_bultos_kabellitos']?.toString() ?? '0'),
         TextCellValue(data['total_pagar']?.toString() ?? '0'),
@@ -295,7 +295,7 @@ Future<void> exportarRankingProductos(BuildContext context) async {
       final data = doc.data();
       final productos = (data['productos'] as List<dynamic>?) ?? [];
       for (var p in productos) {
-        String nombre = p['nombre']?.toString() ?? 'Desconocido';
+        String nombre = p['nombre_despacho']?.toString() ?? p['nombre']?.toString() ?? 'Desconocido';
         int cantidad = (p['cantidad'] as num?)?.toInt() ?? 0;
         double subtotal = (p['subtotal'] as num?)?.toDouble() ?? 0.0;
 
@@ -372,7 +372,7 @@ Future<void> exportarRankingVendedores(BuildContext context) async {
       String codigo = data['vendedor_codigo']?.toString() ?? 'Sin_codigo';
       String nombre = data['vendedor']?.toString() ?? 'Sin_nombre';
       double totalPagar = (data['total_pagar'] as num?)?.toDouble() ?? 0.0;
-      int unidades = (data['total_barras'] ?? data['total_unidades'] as num?)?.toInt() ?? 0;
+      int unidades = (data['total_unidades'] ?? data['total_barras'] as num?)?.toInt() ?? 0;
       int cajas = (data['total_cajas'] as num?)?.toInt() ?? 0;
 
       if (!metricasVendedor.containsKey(codigo)) {
@@ -1407,7 +1407,7 @@ class AdminDashboardScreen extends StatelessWidget {
 }
 
 // ==========================================
-// PANTALLA: CONTROL DE PEDIDOS Y PAGOS
+// PANTALLA: CONTROL DE PEDIDOS Y PAGOS (CON DETALLE INSPECCIONABLE)
 // ==========================================
 class GestionPedidosScreen extends StatefulWidget {
   const GestionPedidosScreen({super.key});
@@ -1428,6 +1428,119 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
       default:
         return Colors.orange.shade700;
     }
+  }
+
+  void _mostrarDetallePedido(Map<String, dynamic> data) {
+    List<dynamic> productos = (data['productos'] as List<dynamic>?) ?? [];
+    String numPedido = data['numero_pedido']?.toString() ?? 'S/N';
+    String cliente = data['cliente']?.toString() ?? 'N/A';
+    String rif = data['cliente_rif']?.toString() ?? 'N/A';
+    String codCliente = data['codigo_cliente']?.toString() ?? 'S/C';
+    String direccion = data['direccion']?.toString() ?? 'N/A';
+    String observaciones = data['observaciones']?.toString() ?? '';
+    String vendedor = data['vendedor']?.toString() ?? 'N/A';
+    String vendedorCod = data['vendedor_codigo']?.toString() ?? 'N/A';
+    String fechaStr = formatearFechaHora(data['fecha']);
+    String estatus = data['estatus']?.toString() ?? 'Procesado';
+    double total = (data['total_pagar'] as num?)?.toDouble() ?? 0.0;
+    int unidades = (data['total_unidades'] ?? data['total_barras'] as num?)?.toInt() ?? 0;
+    int cajasSoe = (data['total_cajas_soe'] as num?)?.toInt() ?? 0;
+    int bultosKabellitos = (data['total_bultos_kabellitos'] as num?)?.toInt() ?? 0;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollController) => Padding(
+          padding: const EdgeInsets.all(18.0),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Detalle $numPedido', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.pink)),
+                  IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                ],
+              ),
+              const Divider(),
+              Text(cliente, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 2),
+              Text('RIF: $rif | Código: $codCliente', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+              Text('Dirección: $direccion', style: const TextStyle(fontSize: 13)),
+              if (observaciones.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text('Obs: $observaciones', style: const TextStyle(fontSize: 13, color: Colors.black87, fontStyle: FontStyle.italic)),
+                ),
+              const SizedBox(height: 6),
+              Text('Vendedor: $vendedor ($vendedorCod)', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              Text('Fecha: $fechaStr | Estatus: $estatus', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              const Divider(height: 24),
+              const Text('PRODUCTOS EN EL PEDIDO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 8),
+              ...productos.map((p) {
+                String nom = p['nombre_despacho'] ?? p['nombre'] ?? 'Producto';
+                int cant = (p['cantidad'] as num?)?.toInt() ?? 0;
+                double sub = (p['subtotal'] as num?)?.toDouble() ?? 0.0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: Colors.pink.shade50, borderRadius: BorderRadius.circular(4)),
+                        child: Text('${cant}x', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.pink)),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(nom, style: const TextStyle(fontSize: 13))),
+                      Text('\$${sub.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    ],
+                  ),
+                );
+              }).toList(),
+              const Divider(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('TOTAL FACTURADO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('\$${total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.green)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('• Total Unidades: $unidades', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                    if (cajasSoe > 0)
+                      Text('• Cajas SOE (36u): $cajasSoe', style: const TextStyle(fontSize: 12, color: Colors.pink, fontWeight: FontWeight.w600)),
+                    if (bultosKabellitos > 0)
+                      Text('• Bultos Kabellitos (12u): $bultosKabellitos', style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.w600)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.pink, minimumSize: const Size(double.infinity, 45)),
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('CERRAR', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1545,79 +1658,85 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       elevation: 2,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: Colors.pink.shade50,
-                                          borderRadius: BorderRadius.circular(4),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: () => _mostrarDetallePedido(data),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.pink.shade50,
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(numPedido, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.pink)),
                                         ),
-                                        child: Text(numPedido, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.pink)),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          cliente,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                          overflow: TextOverflow.ellipsis,
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            cliente,
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Text(
-                                  '\$${total.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Text('RIF: $rif | Cód: $codCliente | Vendedor: $vendedor', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                            const Divider(),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text('Estatus:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                                  decoration: BoxDecoration(
-                                    color: _colorEstatus(estatusActual).withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(color: _colorEstatus(estatusActual)),
-                                  ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
-                                      value: ['Procesado', 'Despachado', 'Pagado'].contains(estatusActual) ? estatusActual : 'Procesado',
-                                      icon: Icon(Icons.arrow_drop_down, color: _colorEstatus(estatusActual)),
-                                      style: TextStyle(color: _colorEstatus(estatusActual), fontWeight: FontWeight.bold),
-                                      items: const [
-                                        DropdownMenuItem(value: 'Procesado', child: Text('🟡 Procesado')),
-                                        DropdownMenuItem(value: 'Despachado', child: Text('🔵 Despachado')),
-                                        DropdownMenuItem(value: 'Pagado', child: Text('🟢 Pagado')),
                                       ],
-                                      onChanged: (nuevo) async {
-                                        if (nuevo != null && nuevo != estatusActual) {
-                                          await FirebaseFirestore.instance.collection('pedidos').doc(doc.id).update({
-                                            'estatus': nuevo,
-                                          });
-                                        }
-                                      },
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ],
+                                  Text(
+                                    '\$${total.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text('RIF: $rif | Cód: $codCliente | Vendedor: $vendedor', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                              const SizedBox(height: 2),
+                              const Text('👉 Toca para ver los productos', style: TextStyle(fontSize: 11, color: Colors.pink, fontStyle: FontStyle.italic)),
+                              const Divider(),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text('Estatus:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                                    decoration: BoxDecoration(
+                                      color: _colorEstatus(estatusActual).withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: _colorEstatus(estatusActual)),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: ['Procesado', 'Despachado', 'Pagado'].contains(estatusActual) ? estatusActual : 'Procesado',
+                                        icon: Icon(Icons.arrow_drop_down, color: _colorEstatus(estatusActual)),
+                                        style: TextStyle(color: _colorEstatus(estatusActual), fontWeight: FontWeight.bold),
+                                        items: const [
+                                          DropdownMenuItem(value: 'Procesado', child: Text('🟡 Procesado')),
+                                          DropdownMenuItem(value: 'Despachado', child: Text('🔵 Despachado')),
+                                          DropdownMenuItem(value: 'Pagado', child: Text('🟢 Pagado')),
+                                        ],
+                                        onChanged: (nuevo) async {
+                                          if (nuevo != null && nuevo != estatusActual) {
+                                            await FirebaseFirestore.instance.collection('pedidos').doc(doc.id).update({
+                                              'estatus': nuevo,
+                                            });
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );
@@ -2490,7 +2609,7 @@ class _FormularioScreenState extends State<FormularioScreen> {
 }
 
 // ==========================================
-// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS (MULTIMARCA + HOTELERÍA)
+// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS (MULTIMARCA + HOTELERÍA + BOTONES CON COLORES)
 // ==========================================
 class CatalogoScreen extends StatefulWidget {
   final String codigoCliente, cliente, rif, direccion, observaciones, vendedor, vendedorCodigo, rolUsuario;
@@ -2553,6 +2672,15 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     return total;
   }
 
+  // Regla comercial: Si contiene productos de Hotelería no hay pedido mínimo (desde 1 unidad).
+  // Si es solo retail (SOE / Kabellitos), el mínimo es 12 unidades.
+  bool get cumpleMinimo {
+    if (totalUnidades == 0) return false;
+    bool tieneHoteleria = carrito.keys.any((p) => p.marca == 'Hotelería');
+    if (tieneHoteleria) return true;
+    return totalUnidades >= 12;
+  }
+
   Future<void> _generarYCompartirPDF() async {
     if (generandoPDF) return;
 
@@ -2599,11 +2727,11 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                 pw.SizedBox(height: 10),
 
                 pw.TableHelper.fromTextArray(
-                  headers: ['Producto', 'Línea', 'Cant.', 'Precio U.', 'Subtotal'],
+                  headers: ['Producto (Especificación)', 'Línea', 'Cant.', 'Precio U.', 'Subtotal'],
                   headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
                   headerDecoration: const pw.BoxDecoration(color: PdfColors.pink),
                   data: carrito.entries.map((e) => [
-                    e.key.nombre,
+                    e.key.nombreDespacho,
                     e.key.marca,
                     e.value.toString(),
                     '\$${e.key.precio.toStringAsFixed(2)}',
@@ -2617,9 +2745,9 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                   child: pw.Text('TOTAL A PAGAR: \$${totalPagar.toStringAsFixed(2)}', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
                 ),
                 pw.SizedBox(height: 15),
-                pw.Text('DESGLOSE LOGÍSTICO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
+                pw.Text('DESGLOSE LOGÍSTICO DESPACHO:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 12)),
                 pw.SizedBox(height: 4),
-                pw.Text('• Total Unidades: $totalUnidades', style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('• Total Unidades Netas: $totalUnidades', style: const pw.TextStyle(fontSize: 11)),
                 if (totalCajasSoe > 0)
                   pw.Text('• Cajas SOE (36 und): $totalCajasSoe', style: const pw.TextStyle(fontSize: 11)),
                 if (totalBultosKabellitos > 0)
@@ -2638,6 +2766,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
       carrito.forEach((producto, cantidad) {
         listaProductos.add({
           'nombre': producto.nombre,
+          'nombre_despacho': producto.nombreDespacho,
           'marca': producto.marca,
           'cantidad': cantidad,
           'precio': producto.precio,
@@ -2697,6 +2826,49 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     }
   }
 
+  Widget _buildBotonMarca({
+    required String titulo,
+    required String valor,
+    required Color colorActivo,
+    required Color colorInactivo,
+    required Color colorTextoActivo,
+    required Color colorTextoInactivo,
+  }) {
+    bool seleccionado = _marcaFiltro == valor;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: Material(
+        color: seleccionado ? colorActivo : colorInactivo,
+        borderRadius: BorderRadius.circular(20),
+        elevation: seleccionado ? 2 : 0,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () {
+            setState(() => _marcaFiltro = valor);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: seleccionado ? colorActivo : Colors.grey.shade300,
+                width: 1.2,
+              ),
+            ),
+            child: Text(
+              titulo,
+              style: TextStyle(
+                color: seleccionado ? colorTextoActivo : colorTextoInactivo,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final listaActual = productosFiltrados;
@@ -2724,84 +2896,65 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
       ),
       body: Column(
         children: [
-          // BARRA SUPERIOR DE FILTRO POR LÍNEA DE PRODUCTO
+          // BARRA SUPERIOR CON COLORES PERSONALIZADOS:
+          // Todos -> Negro
+          // SOE Cosméticos -> Rosa
+          // Kabellitos -> Verde claro
+          // Hotelería -> Azul rey
           Container(
-            color: Colors.grey.shade100,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  ChoiceChip(
-                    label: const Text('Todos'),
-                    selected: _marcaFiltro == 'Todos',
-                    selectedColor: Colors.pink.shade100,
-                    onSelected: (val) {
-                      if (val) setState(() => _marcaFiltro = 'Todos');
-                    },
+                  _buildBotonMarca(
+                    titulo: 'Todos',
+                    valor: 'Todos',
+                    colorActivo: Colors.black,
+                    colorInactivo: Colors.grey.shade100,
+                    colorTextoActivo: Colors.white,
+                    colorTextoInactivo: Colors.black87,
                   ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('SOE Cosméticos'),
-                    selected: _marcaFiltro == 'SOE',
-                    selectedColor: Colors.pink.shade100,
-                    onSelected: (val) {
-                      if (val) setState(() => _marcaFiltro = 'SOE');
-                    },
+                  _buildBotonMarca(
+                    titulo: 'SOE Cosméticos',
+                    valor: 'SOE',
+                    colorActivo: Colors.pink,
+                    colorInactivo: Colors.pink.shade50,
+                    colorTextoActivo: Colors.white,
+                    colorTextoInactivo: Colors.pink.shade900,
                   ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('Kabellitos'),
-                    selected: _marcaFiltro == 'Kabellitos',
-                    selectedColor: Colors.purple.shade100,
-                    onSelected: (val) {
-                      if (val) setState(() => _marcaFiltro = 'Kabellitos');
-                    },
+                  _buildBotonMarca(
+                    titulo: 'Kabellitos',
+                    valor: 'Kabellitos',
+                    colorActivo: const Color(0xFF66BB6A), // Verde claro vivo
+                    colorInactivo: const Color(0xFFE8F5E9),
+                    colorTextoActivo: Colors.white,
+                    colorTextoInactivo: const Color(0xFF1B5E20),
                   ),
-                  const SizedBox(width: 8),
-                  ChoiceChip(
-                    label: const Text('🏨 Hotelería'),
-                    selected: _marcaFiltro == 'Hotelería',
-                    selectedColor: Colors.teal.shade100,
-                    onSelected: (val) {
-                      if (val) setState(() => _marcaFiltro = 'Hotelería');
-                    },
+                  _buildBotonMarca(
+                    titulo: '🏨 Hotelería',
+                    valor: 'Hotelería',
+                    colorActivo: const Color(0xFF1565C0), // Azul Rey
+                    colorInactivo: const Color(0xFFE3F2FD),
+                    colorTextoActivo: Colors.white,
+                    colorTextoInactivo: const Color(0xFF0D47A1),
                   ),
                 ],
               ),
             ),
           ),
+          const Divider(height: 1),
 
-          // LISTA DE PRODUCTOS O VISTA DE ESPERA PARA HOTELERÍA
+          // LISTA DE PRODUCTOS DEL CATÁLOGO
           Expanded(
             child: listaActual.isEmpty
-                ? Center(
+                ? const Center(
                     child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            _marcaFiltro == 'Hotelería' ? Icons.hotel : Icons.inventory_2_outlined,
-                            size: 64,
-                            color: Colors.grey.shade400,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            _marcaFiltro == 'Hotelería'
-                                ? 'LÍNEA HOTELERA EN PREPARACIÓN'
-                                : 'No hay productos disponibles en esta sección',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          if (_marcaFiltro == 'Hotelería')
-                            const Text(
-                              'Próximamente disponible para pedidos institucionales.',
-                              style: TextStyle(fontSize: 13, color: Colors.grey),
-                              textAlign: TextAlign.center,
-                            ),
-                        ],
+                      padding: EdgeInsets.all(24.0),
+                      child: Text(
+                        'No hay productos registrados en esta sección',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.grey),
                       ),
                     ),
                   )
@@ -2810,7 +2963,16 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                     itemBuilder: (context, index) {
                       final producto = listaActual[index];
                       final cantidad = carrito[producto] ?? 0;
-                      bool esKabellitos = producto.marca == 'Kabellitos';
+
+                      Color colorBadge = Colors.pink;
+                      Color bgBadge = Colors.pink.shade50;
+                      if (producto.marca == 'Kabellitos') {
+                        colorBadge = const Color(0xFF2E7D32);
+                        bgBadge = const Color(0xFFE8F5E9);
+                      } else if (producto.marca == 'Hotelería') {
+                        colorBadge = const Color(0xFF1565C0);
+                        bgBadge = const Color(0xFFE3F2FD);
+                      }
 
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2828,7 +2990,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                                         Container(
                                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                           decoration: BoxDecoration(
-                                            color: esKabellitos ? Colors.purple.shade50 : Colors.pink.shade50,
+                                            color: bgBadge,
                                             borderRadius: BorderRadius.circular(4),
                                           ),
                                           child: Text(
@@ -2836,7 +2998,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                                             style: TextStyle(
                                               fontSize: 10,
                                               fontWeight: FontWeight.bold,
-                                              color: esKabellitos ? Colors.purple.shade700 : Colors.pink.shade700,
+                                              color: colorBadge,
                                             ),
                                           ),
                                         ),
@@ -2853,7 +3015,9 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                                     ),
                                     Text(
-                                      '\$${producto.precio.toStringAsFixed(2)} / und (Bulto: ${producto.unidadesPorBulto}u)',
+                                      producto.marca == 'Hotelería'
+                                          ? '\$${producto.precio.toStringAsFixed(2)} / und'
+                                          : '\$${producto.precio.toStringAsFixed(2)} / und (Bulto: ${producto.unidadesPorBulto}u)',
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.green),
                                     ),
                                   ],
@@ -2888,8 +3052,8 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                                               autofocus: true,
                                               decoration: InputDecoration(
                                                 labelText: 'Cantidad de unidades',
-                                                hintText: 'Ej: ${producto.unidadesPorBulto}',
-                                                helperText: '1 bulto = ${producto.unidadesPorBulto} unidades',
+                                                hintText: 'Ej: ${producto.unidadesPorBulto > 1 ? producto.unidadesPorBulto : 50}',
+                                                helperText: producto.unidadesPorBulto > 1 ? '1 bulto = ${producto.unidadesPorBulto} unidades' : null,
                                                 border: const OutlineInputBorder(),
                                               ),
                                             ),
@@ -2977,27 +3141,29 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                         children: [
                           Text(
                             totalCajasSoe > 0 ? 'SOE: $totalCajasSoe caja(s)' : '',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 12, color: Colors.pink, fontWeight: FontWeight.w600),
                           ),
                           Text(
                             totalBultosKabellitos > 0 ? 'Kabellitos: $totalBultosKabellitos bulto(s)' : '',
-                            style: const TextStyle(fontSize: 12, color: Colors.purple, fontWeight: FontWeight.w600),
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF2E7D32), fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
                       const SizedBox(height: 10),
                       ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
+                          backgroundColor: cumpleMinimo ? Colors.green : Colors.grey,
                           minimumSize: const Size(double.infinity, 50),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        onPressed: !generandoPDF ? _generarYCompartirPDF : null,
+                        onPressed: cumpleMinimo && !generandoPDF ? _generarYCompartirPDF : null,
                         child: generandoPDF
                             ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                'GENERAR PEDIDO Y PDF',
-                                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                            : Text(
+                                cumpleMinimo
+                                    ? 'GENERAR PEDIDO Y PDF'
+                                    : 'Faltan ${12 - totalUnidades} unidades (Min. 12)',
+                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                       ),
                     ],
