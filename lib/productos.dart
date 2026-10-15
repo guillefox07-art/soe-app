@@ -14,10 +14,11 @@ class Producto {
     required this.descripcion,
     this.marca = 'SOE',
     this.unidadesPorBulto = 36,
-    String? nombreDespacho,
-  }) : nombreDespacho = nombreDespacho ?? "$nombre ($categoria)";
+    required this.nombreDespacho,
+  });
 }
 
+// Catálogo General Unificado
 final List<Producto> catalogoSoe = [
   // ==========================================
   // 1. LÍNEA SOE COSMÉTICOS (Cajas de 36 unidades)
@@ -307,4 +308,65 @@ final List<Producto> catalogoSoe = [
     nombre: 'Jabón SOE Redondo Hotel 20g',
     categoria: 'Jabones Redondos',
     precio: 0.34,
-    descripcion: '20g redondo. Presentación
+    descripcion: '20g redondo. Presentación hotelera circular.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 20g — Redondo',
+  ),
+  Producto(
+    nombre: 'Jabón SOE Redondo Hotel 30g',
+    categoria: 'Jabones Redondos',
+    precio: 0.45,
+    descripcion: '30g redondo. Presentación hotelera circular.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Jabón SOE Hotel 30g — Redondo',
+  ),
+
+  // Amenities (30ml)
+  Producto(
+    nombre: 'Shampoo 30ml',
+    categoria: 'Amenities',
+    precio: 0.50,
+    descripcion: '30ml frasco hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Shampoo Hotelero 30ml — Amenities',
+  ),
+  Producto(
+    nombre: 'Acondicionador 30ml',
+    categoria: 'Amenities',
+    precio: 0.50,
+    descripcion: '30ml frasco hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Acondicionador Hotelero 30ml — Amenities',
+  ),
+  Producto(
+    nombre: 'Gel de Baño 30ml',
+    categoria: 'Amenities',
+    precio: 0.50,
+    descripcion: '30ml frasco hotelero.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Gel de Baño Hotelero 30ml — Amenities',
+  ),
+  Producto(
+    nombre: 'Body Lotion 30ml',
+    categoria: 'Amenities',
+    precio: 0.50,
+    descripcion: '30ml loción corporal hotelera.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Body Lotion Hotelera 30ml — Amenities',
+  ),
+  Producto(
+    nombre: 'Espuma para Jacuzzi 30ml',
+    categoria: 'Amenities',
+    precio: 0.50,
+    descripcion: '30ml concentrado para tina/jacuzzi.',
+    marca: 'Hotelería',
+    unidadesPorBulto: 1,
+    nombreDespacho: 'Espuma para Jacuzzi 30ml — Amenities',
+  ),
+];
