@@ -199,6 +199,15 @@ final List<Producto> catalogoSoe = [
   // 2. LÍNEA KABELLITOS (Bultos de 12 unidades / Docena)
   // ==========================================
   Producto(
+    nombre: 'Repelente para insectos',
+    categoria: 'Cuidado Infantil',
+    precio: 2.48,
+    descripcion: 'Protección infantil contra insectos. Bulto de 12 unidades.',
+    marca: 'Kabellitos',
+    unidadesPorBulto: 12,
+    nombreDespacho: 'Repelente para insectos Kabellitos — Cuidado Infantil (Docena)',
+  ),
+  Producto(
     nombre: 'Kabellitos Colonia',
     categoria: 'Cuidado Infantil',
     precio: 3.44,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,7 +14,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:ota_update/ota_update.dart';
 
 // Versión local de la aplicación
-const String kAppVersion = "1.5.7";
+const String kAppVersion = "1.5.8";
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1104,9 +1105,9 @@ class _TerminosCondicionesScreenState extends State<TerminosCondicionesScreen> {
 }
 
 // ==========================================
-// PANTALLA: PANEL ADMINISTRATIVO / DESARROLLADOR
+// PANTALLA: PANEL ADMINISTRATIVO / DESARROLLADOR (CON NOTIFICACIONES EN VIVO)
 // ==========================================
-class AdminDashboardScreen extends StatelessWidget {
+class AdminDashboardScreen extends StatefulWidget {
   final String nombreUsuario, codigoUsuario, rolUsuario;
 
   const AdminDashboardScreen({
@@ -1115,6 +1116,90 @@ class AdminDashboardScreen extends StatelessWidget {
     required this.codigoUsuario,
     required this.rolUsuario,
   });
+
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  StreamSubscription? _pedidosSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _iniciarListenerNotificacionesAdmin();
+  }
+
+  @override
+  void dispose() {
+    _pedidosSub?.cancel();
+    super.dispose();
+  }
+
+  void _iniciarListenerNotificacionesAdmin() {
+    // REGLA: Notificar exclusivamente al rol 'admin'. OMITIR siempre al creador/desarrollador.
+    if (widget.rolUsuario.toLowerCase() == 'admin' && widget.codigoUsuario.toLowerCase() != 'guillefox') {
+      DateTime inicio = DateTime.now();
+      _pedidosSub = FirebaseFirestore.instance.collection('pedidos').snapshots().listen((snapshot) {
+        for (var change in snapshot.docChanges) {
+          if (change.type == DocumentChangeType.added) {
+            final data = change.doc.data();
+            if (data != null && mounted) {
+              Timestamp? t = data['fecha'] as Timestamp?;
+              if (t != null && t.toDate().isAfter(inicio.subtract(const Duration(seconds: 4)))) {
+                String numPed = data['numero_pedido'] ?? 'Nuevo Pedido';
+                String cli = data['cliente'] ?? 'Cliente';
+                double total = (data['total_pagar'] as num?)?.toDouble() ?? 0.0;
+
+                HapticFeedback.heavyImpact();
+                SystemSound.play(SystemSoundType.alert);
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    behavior: SnackBarBehavior.floating,
+                    backgroundColor: Colors.purple.shade900,
+                    duration: const Duration(seconds: 7),
+                    content: Row(
+                      children: [
+                        const Icon(Icons.notifications_active, color: Colors.amber, size: 28),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('🔔 ¡NUEVO PEDIDO $numPed!', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                              Text('$cli • Total: \$${total.toStringAsFixed(2)}', style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    action: SnackBarAction(
+                      label: 'VER',
+                      textColor: Colors.amber,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => GestionPedidosScreen(
+                              codigoUsuario: widget.codigoUsuario,
+                              nombreUsuario: widget.nombreUsuario,
+                              rolUsuario: widget.rolUsuario,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }
+            }
+          }
+        }
+      });
+    }
+  }
 
   void _cerrarSesion(BuildContext context) {
     Navigator.pushReplacement(
@@ -1195,7 +1280,7 @@ class AdminDashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    bool esDev = rolUsuario == 'desarrollador';
+    bool esDev = widget.rolUsuario == 'desarrollador';
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -1237,8 +1322,8 @@ class AdminDashboardScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(nombreUsuario, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text('Código: $codigoUsuario', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+                          Text(widget.nombreUsuario, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          Text('Código: ${widget.codigoUsuario}', style: const TextStyle(fontSize: 13, color: Colors.grey)),
                           const SizedBox(height: 4),
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -1274,7 +1359,13 @@ class AdminDashboardScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => const GestionPedidosScreen()),
+                  MaterialPageRoute(
+                    builder: (context) => GestionPedidosScreen(
+                      codigoUsuario: widget.codigoUsuario,
+                      nombreUsuario: widget.nombreUsuario,
+                      rolUsuario: widget.rolUsuario,
+                    ),
+                  ),
                 );
               },
             ),
@@ -1314,7 +1405,25 @@ class AdminDashboardScreen extends StatelessWidget {
             ),
             const SizedBox(height: 25),
 
-            const Text('REPORTES Y RANKINGS EXCEL', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const Text('RANKINGS Y REPORTES', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
+            const SizedBox(height: 10),
+
+            // RANKINGS INTERACTIVOS CON MEDALLAS EN PANTALLA
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade800,
+                minimumSize: const Size(double.infinity, 50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.emoji_events, color: Colors.white),
+              label: const Text('🏆 RANKINGS INTERACTIVOS (TOP 10)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const RankingInteractivosScreen()),
+                );
+              },
+            ),
             const SizedBox(height: 10),
 
             ElevatedButton.icon(
@@ -1324,7 +1433,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.leaderboard, color: Colors.white),
-              label: const Text('TOP DE PRODUCTOS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              label: const Text('TOP PRODUCTOS (EXCEL)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               onPressed: () => exportarRankingProductos(context),
             ),
             const SizedBox(height: 10),
@@ -1335,8 +1444,8 @@ class AdminDashboardScreen extends StatelessWidget {
                 minimumSize: const Size(double.infinity, 50),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
-              icon: const Icon(Icons.emoji_events, color: Colors.white),
-              label: const Text('TOP DE VENDEDORES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.badge, color: Colors.white),
+              label: const Text('TOP VENDEDORES (EXCEL)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               onPressed: () => exportarRankingVendedores(context),
             ),
             const SizedBox(height: 10),
@@ -1348,7 +1457,7 @@ class AdminDashboardScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               ),
               icon: const Icon(Icons.table_chart, color: Colors.white),
-              label: const Text('REPORTE DE VENTAS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              label: const Text('REPORTE VENTAS GLOBAL (EXCEL)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               onPressed: () => exportarReporteExcel(context: context, tituloReporte: "Global"),
             ),
             const SizedBox(height: 10),
@@ -1391,9 +1500,9 @@ class AdminDashboardScreen extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => FormularioScreen(
-                      nombreUsuario: nombreUsuario,
-                      codigoUsuario: codigoUsuario,
-                      rolUsuario: rolUsuario,
+                      nombreUsuario: widget.nombreUsuario,
+                      codigoUsuario: widget.codigoUsuario,
+                      rolUsuario: widget.rolUsuario,
                     ),
                   ),
                 );
@@ -1407,10 +1516,195 @@ class AdminDashboardScreen extends StatelessWidget {
 }
 
 // ==========================================
-// PANTALLA: CONTROL DE PEDIDOS Y PAGOS (CON DETALLE INSPECCIONABLE)
+// PANTALLA: RANKINGS INTERACTIVOS (TOP 10 CON MEDALLAS)
+// ==========================================
+class RankingInteractivosScreen extends StatefulWidget {
+  const RankingInteractivosScreen({super.key});
+
+  @override
+  State<RankingInteractivosScreen> createState() => _RankingInteractivosScreenState();
+}
+
+class _RankingInteractivosScreenState extends State<RankingInteractivosScreen> {
+  String _segmento = 'Retail'; // Retail (SOE + Kabellitos) o Hotelería
+  String _periodo = 'Mes'; // Mes, Trimestre, Año, Global
+
+  bool _perteneceAlPeriodo(DateTime fecha) {
+    final now = DateTime.now();
+    if (_periodo == 'Mes') {
+      return fecha.year == now.year && fecha.month == now.month;
+    } else if (_periodo == 'Trimestre') {
+      int trimestreActual = ((now.month - 1) / 3).floor();
+      int trimestreFecha = ((fecha.month - 1) / 3).floor();
+      return fecha.year == now.year && trimestreActual == trimestreFecha;
+    } else if (_periodo == 'Año') {
+      return fecha.year == now.year;
+    }
+    return true; // Global
+  }
+
+  String _obtenerMedalla(int pos) {
+    if (pos == 1) return '🥇';
+    if (pos == 2) return '🥈';
+    if (pos == 3) return '🥉';
+    return '#$pos';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Top 10 Rankings', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.amber.shade200,
+      ),
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            color: Colors.amber.shade50,
+            child: Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Línea:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'Retail', label: Text('Retail (SOE+Kab)')),
+                        ButtonSegment(value: 'Hotelería', label: Text('Hotelería')),
+                      ],
+                      selected: {_segmento},
+                      onSelectionChanged: (v) => setState(() => _segmento = v.first),
+                      style: SegmentedButton.styleFrom(selectedBackgroundColor: Colors.amber.shade700, selectedForegroundColor: Colors.white),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Período:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    DropdownButton<String>(
+                      value: _periodo,
+                      items: const [
+                        DropdownMenuItem(value: 'Mes', child: Text('Mes actual')),
+                        DropdownMenuItem(value: 'Trimestre', child: Text('Trimestre actual')),
+                        DropdownMenuItem(value: 'Año', child: Text('Año actual')),
+                        DropdownMenuItem(value: 'Global', child: Text('Histórico Global')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setState(() => _periodo = v);
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance.collection('pedidos').snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(child: Text('No hay datos registrados'));
+                }
+
+                Map<String, double> vendedorMonto = {};
+                Map<String, int> vendedorUnidades = {};
+
+                for (var doc in snapshot.data!.docs) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  Timestamp? t = data['fecha'] as Timestamp?;
+                  if (t == null) continue;
+                  if (!_perteneceAlPeriodo(t.toDate())) continue;
+
+                  String vendedor = data['vendedor'] ?? 'Vendedor';
+                  List<dynamic> prods = (data['productos'] as List<dynamic>?) ?? [];
+
+                  for (var p in prods) {
+                    String marca = p['marca'] ?? '';
+                    bool califica = false;
+                    if (_segmento == 'Retail' && (marca == 'SOE' || marca == 'Kabellitos')) {
+                      califica = true;
+                    } else if (_segmento == 'Hotelería' && marca == 'Hotelería') {
+                      califica = true;
+                    }
+
+                    if (califica) {
+                      double sub = (p['subtotal'] as num?)?.toDouble() ?? 0.0;
+                      int cant = (p['cantidad'] as num?)?.toInt() ?? 0;
+                      vendedorMonto[vendedor] = (vendedorMonto[vendedor] ?? 0.0) + sub;
+                      vendedorUnidades[vendedor] = (vendedorUnidades[vendedor] ?? 0) + cant;
+                    }
+                  }
+                }
+
+                var lista = vendedorMonto.entries.toList()
+                  ..sort((a, b) => b.value.compareTo(a.value));
+
+                if (lista.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Text('No hay pedidos registrados en este período y categoría.', textAlign: TextAlign.center),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: lista.length > 10 ? 10 : lista.length,
+                  itemBuilder: (ctx, i) {
+                    final item = lista[i];
+                    int unds = vendedorUnidades[item.key] ?? 0;
+                    return Card(
+                      elevation: i < 3 ? 3 : 1,
+                      margin: const EdgeInsets.symmetric(vertical: 5),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundColor: i == 0
+                              ? Colors.amber.shade100
+                              : (i == 1 ? Colors.grey.shade300 : (i == 2 ? Colors.orange.shade100 : Colors.grey.shade100)),
+                          child: Text(_obtenerMedalla(i + 1), style: const TextStyle(fontSize: 18)),
+                        ),
+                        title: Text(item.key, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Text('Unidades vendidas: $unds und.'),
+                        trailing: Text(
+                          '\$${item.value.toStringAsFixed(2)}',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ==========================================
+// PANTALLA: CONTROL DE PEDIDOS Y PAGOS (CON EDICIÓN Y RECÁLCULO)
 // ==========================================
 class GestionPedidosScreen extends StatefulWidget {
-  const GestionPedidosScreen({super.key});
+  final String? codigoUsuario;
+  final String? nombreUsuario;
+  final String? rolUsuario;
+
+  const GestionPedidosScreen({
+    super.key,
+    this.codigoUsuario,
+    this.nombreUsuario,
+    this.rolUsuario,
+  });
 
   @override
   State<GestionPedidosScreen> createState() => _GestionPedidosScreenState();
@@ -1425,12 +1719,193 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
         return Colors.blue.shade700;
       case 'Pagado':
         return Colors.green.shade700;
+      case 'Cancelado':
+        return Colors.red.shade700;
       default:
         return Colors.orange.shade700;
     }
   }
 
-  void _mostrarDetallePedido(Map<String, dynamic> data) {
+  void _mostrarModalEditarPedido(DocumentSnapshot docPedido, Map<String, dynamic> dataPedido) {
+    List<Map<String, dynamic>> itemsEditables = List<Map<String, dynamic>>.from(
+      (dataPedido['productos'] as List<dynamic>?)?.map((x) => Map<String, dynamic>.from(x)) ?? [],
+    );
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            double totalCalculado = 0;
+            int totalUnds = 0;
+            for (var it in itemsEditables) {
+              int c = (it['cantidad'] as num).toInt();
+              double p = (it['precio'] as num).toDouble();
+              totalCalculado += (c * p);
+              totalUnds += c;
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                left: 16,
+                right: 16,
+                top: 16,
+              ),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.85),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Editar Pedido ${dataPedido['numero_pedido']}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.pink)),
+                        IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(ctx)),
+                      ],
+                    ),
+                    const Divider(),
+                    const Text('Ajusta cantidades o elimina renglones agotados:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: itemsEditables.isEmpty
+                          ? const Center(child: Text('Todos los renglones han sido eliminados.', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)))
+                          : ListView.builder(
+                              itemCount: itemsEditables.length,
+                              itemBuilder: (ctx, i) {
+                                final item = itemsEditables[i];
+                                int cant = (item['cantidad'] as num).toInt();
+                                double precio = (item['precio'] as num).toDouble();
+
+                                return Card(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  child: ListTile(
+                                    title: Text(item['nombre_despacho'] ?? item['nombre'] ?? 'Producto', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                    subtitle: Text('Precio: \$${precio.toStringAsFixed(2)} | Subtotal: \$${(cant * precio).toStringAsFixed(2)}'),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.edit, color: Colors.blue),
+                                          onPressed: () {
+                                            TextEditingController cantCtrl = TextEditingController(text: '$cant');
+                                            showDialog(
+                                              context: context,
+                                              builder: (dialogCtx) => AlertDialog(
+                                                title: Text(item['nombre'] ?? 'Ajustar cantidad'),
+                                                content: TextField(
+                                                  controller: cantCtrl,
+                                                  keyboardType: TextInputType.number,
+                                                  decoration: const InputDecoration(labelText: 'Nueva cantidad', border: OutlineInputBorder()),
+                                                ),
+                                                actions: [
+                                                  TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('Cancelar')),
+                                                  ElevatedButton(
+                                                    onPressed: () {
+                                                      int nueva = int.tryParse(cantCtrl.text) ?? cant;
+                                                      if (nueva > 0) {
+                                                        setModalState(() {
+                                                          item['cantidad'] = nueva;
+                                                          item['subtotal'] = nueva * precio;
+                                                        });
+                                                      }
+                                                      Navigator.pop(dialogCtx);
+                                                    },
+                                                    child: const Text('Guardar'),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                          onPressed: () {
+                                            setModalState(() => itemsEditables.removeAt(i));
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Unidades: $totalUnds', style: const TextStyle(fontWeight: FontWeight.bold)),
+                          Text('Total: \$${totalCalculado.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.green)),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.pink, minimumSize: const Size(double.infinity, 48)),
+                      onPressed: () async {
+                        if (itemsEditables.isEmpty) {
+                          await FirebaseFirestore.instance.collection('pedidos').doc(docPedido.id).update({
+                            'estatus': 'Cancelado',
+                            'fecha_modificacion': FieldValue.serverTimestamp(),
+                            'modificado_por': '${widget.nombreUsuario ?? "Usuario"} (${widget.codigoUsuario ?? ""})',
+                          });
+                        } else {
+                          int totalCajasSoe = 0;
+                          int totalBultosKabellitos = 0;
+                          for (var it in itemsEditables) {
+                            int c = (it['cantidad'] as num).toInt();
+                            String m = it['marca'] ?? '';
+                            if (m == 'SOE') totalCajasSoe += c;
+                            if (m == 'Kabellitos') totalBultosKabellitos += c;
+                          }
+
+                          int cajasSoe = (totalCajasSoe / 36).ceil();
+                          int bultosKab = (totalBultosKabellitos / 12).ceil();
+
+                          await FirebaseFirestore.instance.collection('pedidos').doc(docPedido.id).update({
+                            'productos': itemsEditables,
+                            'total_pagar': double.parse(totalCalculado.toStringAsFixed(2)),
+                            'total_unidades': totalUnds,
+                            'total_barras': totalUnds,
+                            'total_cajas_soe': cajasSoe,
+                            'total_bultos_kabellitos': bultosKab,
+                            'total_cajas': cajasSoe + bultosKab,
+                            'fecha_modificacion': FieldValue.serverTimestamp(),
+                            'modificado_por': '${widget.nombreUsuario ?? "Usuario"} (${widget.codigoUsuario ?? ""})',
+                          });
+                        }
+
+                        if (context.mounted) {
+                          Navigator.pop(ctx);
+                          Navigator.pop(context); // Cierra modal de detalle
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('¡Pedido actualizado con éxito!'), backgroundColor: Colors.green),
+                          );
+                        }
+                      },
+                      child: const Text('GUARDAR MODIFICACIONES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _mostrarDetallePedido(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
     List<dynamic> productos = (data['productos'] as List<dynamic>?) ?? [];
     String numPedido = data['numero_pedido']?.toString() ?? 'S/N';
     String cliente = data['cliente']?.toString() ?? 'N/A';
@@ -1446,6 +1921,10 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
     int unidades = (data['total_unidades'] ?? data['total_barras'] as num?)?.toInt() ?? 0;
     int cajasSoe = (data['total_cajas_soe'] as num?)?.toInt() ?? 0;
     int bultosKabellitos = (data['total_bultos_kabellitos'] as num?)?.toInt() ?? 0;
+
+    bool esAdminODev = widget.rolUsuario == 'admin' || widget.rolUsuario == 'desarrollador';
+    bool esPropio = widget.codigoUsuario == vendedorCod;
+    bool puedeEditar = (esAdminODev && estatus != 'Pagado') || (widget.rolUsuario == 'vendedor' && esPropio && (estatus == 'Procesado' || estatus == 'Pendiente'));
 
     showModalBottomSheet(
       context: context,
@@ -1483,6 +1962,11 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
               const SizedBox(height: 6),
               Text('Vendedor: $vendedor ($vendedorCod)', style: const TextStyle(fontSize: 12, color: Colors.grey)),
               Text('Fecha: $fechaStr | Estatus: $estatus', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              if (data['modificado_por'] != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4.0),
+                  child: Text('Modificado por: ${data['modificado_por']}', style: const TextStyle(fontSize: 11, color: Colors.purple, fontWeight: FontWeight.bold)),
+                ),
               const Divider(height: 24),
               const Text('PRODUCTOS EN EL PEDIDO:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 8),
@@ -1531,6 +2015,17 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+
+              if (puedeEditar) ...[
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade800, minimumSize: const Size(double.infinity, 45)),
+                  icon: const Icon(Icons.edit, color: Colors.white),
+                  label: const Text('EDITAR PRODUCTOS / CANTIDADES', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  onPressed: () => _mostrarModalEditarPedido(doc, data),
+                ),
+                const SizedBox(height: 8),
+              ],
+
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.pink, minimumSize: const Size(double.infinity, 45)),
                 onPressed: () => Navigator.pop(ctx),
@@ -1545,9 +2040,11 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
 
   @override
   Widget build(BuildContext context) {
+    bool esAdminODev = widget.rolUsuario == 'admin' || widget.rolUsuario == 'desarrollador';
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pedidos y Pagos', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(esAdminODev ? 'Pedidos y Pagos' : 'Mis Pedidos', style: const TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: Colors.pink.shade100,
       ),
       body: Column(
@@ -1602,10 +2099,18 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
 
                 List<QueryDocumentSnapshot> docs = snapshot.data!.docs.toList();
 
+                // Si es vendedor, solo ve sus propios pedidos
+                if (widget.rolUsuario == 'vendedor' && widget.codigoUsuario != null) {
+                  docs = docs.where((d) {
+                    final dat = d.data() as Map<String, dynamic>;
+                    return dat['vendedor_codigo'] == widget.codigoUsuario;
+                  }).toList();
+                }
+
                 if (_filtroEstatus == 'pendientes') {
                   docs = docs.where((d) {
                     final st = (d.data() as Map<String, dynamic>)['estatus']?.toString() ?? 'Procesado';
-                    return st != 'Pagado';
+                    return st != 'Pagado' && st != 'Cancelado';
                   }).toList();
                 } else if (_filtroEstatus == 'pagados') {
                   docs = docs.where((d) {
@@ -1660,7 +2165,7 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
                       elevation: 2,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(10),
-                        onTap: () => _mostrarDetallePedido(data),
+                        onTap: () => _mostrarDetallePedido(doc),
                         child: Padding(
                           padding: const EdgeInsets.all(12.0),
                           child: Column(
@@ -1700,39 +2205,54 @@ class _GestionPedidosScreenState extends State<GestionPedidosScreen> {
                               const SizedBox(height: 4),
                               Text('RIF: $rif | Cód: $codCliente | Vendedor: $vendedor', style: const TextStyle(fontSize: 12, color: Colors.grey)),
                               const SizedBox(height: 2),
-                              const Text('👉 Toca para ver los productos', style: TextStyle(fontSize: 11, color: Colors.pink, fontStyle: FontStyle.italic)),
+                              const Text('👉 Toca para inspeccionar o editar', style: TextStyle(fontSize: 11, color: Colors.pink, fontStyle: FontStyle.italic)),
                               const Divider(),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   const Text('Estatus:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                                    decoration: BoxDecoration(
-                                      color: _colorEstatus(estatusActual).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(color: _colorEstatus(estatusActual)),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: DropdownButton<String>(
-                                        value: ['Procesado', 'Despachado', 'Pagado'].contains(estatusActual) ? estatusActual : 'Procesado',
-                                        icon: Icon(Icons.arrow_drop_down, color: _colorEstatus(estatusActual)),
-                                        style: TextStyle(color: _colorEstatus(estatusActual), fontWeight: FontWeight.bold),
-                                        items: const [
-                                          DropdownMenuItem(value: 'Procesado', child: Text('🟡 Procesado')),
-                                          DropdownMenuItem(value: 'Despachado', child: Text('🔵 Despachado')),
-                                          DropdownMenuItem(value: 'Pagado', child: Text('🟢 Pagado')),
-                                        ],
-                                        onChanged: (nuevo) async {
-                                          if (nuevo != null && nuevo != estatusActual) {
-                                            await FirebaseFirestore.instance.collection('pedidos').doc(doc.id).update({
-                                              'estatus': nuevo,
-                                            });
-                                          }
-                                        },
+                                  if (esAdminODev)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      decoration: BoxDecoration(
+                                        color: _colorEstatus(estatusActual).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: _colorEstatus(estatusActual)),
+                                      ),
+                                      child: DropdownButtonHideUnderline(
+                                        child: DropdownButton<String>(
+                                          value: ['Procesado', 'Despachado', 'Pagado', 'Cancelado'].contains(estatusActual) ? estatusActual : 'Procesado',
+                                          icon: Icon(Icons.arrow_drop_down, color: _colorEstatus(estatusActual)),
+                                          style: TextStyle(color: _colorEstatus(estatusActual), fontWeight: FontWeight.bold),
+                                          items: const [
+                                            DropdownMenuItem(value: 'Procesado', child: Text('🟡 Procesado')),
+                                            DropdownMenuItem(value: 'Despachado', child: Text('🔵 Despachado')),
+                                            DropdownMenuItem(value: 'Pagado', child: Text('🟢 Pagado')),
+                                            DropdownMenuItem(value: 'Cancelado', child: Text('🔴 Cancelado')),
+                                          ],
+                                          onChanged: (nuevo) async {
+                                            if (nuevo != null && nuevo != estatusActual) {
+                                              await FirebaseFirestore.instance.collection('pedidos').doc(doc.id).update({
+                                                'estatus': nuevo,
+                                              });
+                                            }
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: _colorEstatus(estatusActual).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(color: _colorEstatus(estatusActual)),
+                                      ),
+                                      child: Text(
+                                        estatusActual,
+                                        style: TextStyle(color: _colorEstatus(estatusActual), fontWeight: FontWeight.bold, fontSize: 12),
                                       ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ],
@@ -2133,7 +2653,7 @@ class _GestionUsuariosScreenState extends State<GestionUsuariosScreen> {
 }
 
 // ==========================================
-// PANTALLA 1: FORMULARIO DEL CLIENTE
+// PANTALLA 1: FORMULARIO DEL CLIENTE (CON REGISTRO SIN PEDIDO)
 // ==========================================
 class FormularioScreen extends StatefulWidget {
   final String nombreUsuario, codigoUsuario, rolUsuario;
@@ -2344,6 +2864,92 @@ class _FormularioScreenState extends State<FormularioScreen> {
     );
   }
 
+  // REGISTRO DE CLIENTES INDEPENDIENTE (SIN PEDIDO)
+  Future<void> _guardarClienteSinPedido() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() => _validandoCliente = true);
+    String nombreCliente = nombreCtrl.text.trim();
+    String rifNormalizado = rifCtrl.text.trim().toUpperCase().replaceAll(' ', '');
+
+    try {
+      final docCliente = await FirebaseFirestore.instance.collection('clientes').doc(rifNormalizado).get();
+
+      if (!mounted) return;
+
+      if (docCliente.exists) {
+        final data = docCliente.data()!;
+        String vendedorOriginal = data['vendedor_codigo'] ?? '';
+        String nombreVendedorOriginal = data['vendedor_nombre'] ?? 'Otro vendedor';
+
+        if (vendedorOriginal != widget.codigoUsuario && widget.rolUsuario == 'vendedor') {
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: const Text('Cliente Asignado', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+              content: Text(
+                'Este cliente ya pertenece a la cartera de:\n\n'
+                '• Vendedor: $nombreVendedorOriginal\n'
+                '• Código: $vendedorOriginal\n\n'
+                'No puedes registrar clientes asignados a otro vendedor.',
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.pink),
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('Entendido', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            ),
+          );
+          return;
+        } else {
+          await FirebaseFirestore.instance.collection('clientes').doc(rifNormalizado).update({
+            'nombre': nombreCliente,
+            'direccion': direccionCtrl.text.trim(),
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Datos del cliente $nombreCliente actualizados en tu cartera'), backgroundColor: Colors.blue.shade700),
+          );
+          _limpiarFormulario();
+          await _cargarClientesParaAutocompletado();
+          return;
+        }
+      }
+
+      String nuevoCodigo = await _generarCodigoCliente();
+      await FirebaseFirestore.instance.collection('clientes').doc(rifNormalizado).set({
+        'codigo_cliente': nuevoCodigo,
+        'rif': rifNormalizado,
+        'nombre': nombreCliente,
+        'direccion': direccionCtrl.text.trim(),
+        'vendedor_codigo': widget.codigoUsuario,
+        'vendedor_nombre': widget.nombreUsuario,
+        'fecha_creacion': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Cliente $nombreCliente registrado con éxito (Cód: $nuevoCodigo)!'),
+            backgroundColor: Colors.green.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+        _limpiarFormulario();
+        await _cargarClientesParaAutocompletado();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al guardar cliente: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _validandoCliente = false);
+    }
+  }
+
   Future<void> _procesarYContinuar() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -2405,7 +3011,7 @@ class _FormularioScreenState extends State<FormularioScreen> {
 
       final pedidosSinPagar = pedidosCliente.docs.where((doc) {
         final estatus = doc.data()['estatus']?.toString() ?? 'Procesado';
-        return estatus != 'Pagado';
+        return estatus != 'Pagado' && estatus != 'Cancelado';
       }).toList();
 
       if (pedidosSinPagar.isNotEmpty && widget.rolUsuario == 'vendedor') {
@@ -2478,6 +3084,22 @@ class _FormularioScreenState extends State<FormularioScreen> {
         backgroundColor: Colors.pink.shade100,
         centerTitle: true,
         actions: [
+          IconButton(
+            tooltip: 'Mis Pedidos',
+            icon: const Icon(Icons.receipt_long, color: Colors.pink),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GestionPedidosScreen(
+                    codigoUsuario: widget.codigoUsuario,
+                    nombreUsuario: widget.nombreUsuario,
+                    rolUsuario: widget.rolUsuario,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Nuevo Pedido / Limpiar',
             icon: const Icon(Icons.cleaning_services_outlined, color: Colors.pink),
@@ -2591,6 +3213,23 @@ class _FormularioScreenState extends State<FormularioScreen> {
                     : const Text('IR AL CATÁLOGO', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 10),
+
+              // BOTÓN REGISTRO DE CLIENTES INDEPENDIENTE
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  side: BorderSide(color: Colors.green.shade700, width: 1.5),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                icon: Icon(Icons.person_add_alt_1, color: Colors.green.shade700),
+                label: Text(
+                  'REGISTRAR CLIENTE (SIN PEDIDO)',
+                  style: TextStyle(color: Colors.green.shade700, fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+                onPressed: _validandoCliente ? null : _guardarClienteSinPedido,
+              ),
+              const SizedBox(height: 10),
+
               OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size(double.infinity, 45),
@@ -2609,7 +3248,7 @@ class _FormularioScreenState extends State<FormularioScreen> {
 }
 
 // ==========================================
-// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS (MULTIMARCA + HOTELERÍA + BOTONES CON COLORES)
+// PANTALLA 2: CATÁLOGO Y GUARDADO DE PEDIDOS (HOTELERÍA NUMÉRICA + BOTÓN TODOS AL FINAL)
 // ==========================================
 class CatalogoScreen extends StatefulWidget {
   final String codigoCliente, cliente, rif, direccion, observaciones, vendedor, vendedorCodigo, rolUsuario;
@@ -2672,13 +3311,25 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
     return total;
   }
 
-  // Regla comercial: Si contiene productos de Hotelería no hay pedido mínimo (desde 1 unidad).
-  // Si es solo retail (SOE / Kabellitos), el mínimo es 12 unidades.
+  // REGLA COMERCIAL ACTUALIZADA:
+  // Kabellitos y Hotelería no tienen mínimo de compra (venta libre desde 1 unidad).
+  // Solo la marca SOE requiere un mínimo de 12 unidades si está presente en el pedido.
   bool get cumpleMinimo {
     if (totalUnidades == 0) return false;
-    bool tieneHoteleria = carrito.keys.any((p) => p.marca == 'Hotelería');
-    if (tieneHoteleria) return true;
-    return totalUnidades >= 12;
+    int unidadesSoe = 0;
+    carrito.forEach((p, cant) {
+      if (p.marca == 'SOE') unidadesSoe += cant;
+    });
+    if (unidadesSoe > 0 && unidadesSoe < 12) return false;
+    return true;
+  }
+
+  int get unidadesSoeEnCarrito {
+    int u = 0;
+    carrito.forEach((p, cant) {
+      if (p.marca == 'SOE') u += cant;
+    });
+    return u;
   }
 
   Future<void> _generarYCompartirPDF() async {
@@ -2896,11 +3547,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
       ),
       body: Column(
         children: [
-          // BARRA SUPERIOR CON COLORES PERSONALIZADOS:
-          // Todos -> Negro
-          // SOE Cosméticos -> Rosa
-          // Kabellitos -> Verde claro
-          // Hotelería -> Azul rey
+          // BARRA SUPERIOR: EL BOTÓN "TODOS" AHORA ESTÁ AL FINAL
           Container(
             color: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -2908,14 +3555,6 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  _buildBotonMarca(
-                    titulo: 'Todos',
-                    valor: 'Todos',
-                    colorActivo: Colors.black,
-                    colorInactivo: Colors.grey.shade100,
-                    colorTextoActivo: Colors.white,
-                    colorTextoInactivo: Colors.black87,
-                  ),
                   _buildBotonMarca(
                     titulo: 'SOE Cosméticos',
                     valor: 'SOE',
@@ -2927,7 +3566,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                   _buildBotonMarca(
                     titulo: 'Kabellitos',
                     valor: 'Kabellitos',
-                    colorActivo: const Color(0xFF66BB6A), // Verde claro vivo
+                    colorActivo: const Color(0xFF66BB6A),
                     colorInactivo: const Color(0xFFE8F5E9),
                     colorTextoActivo: Colors.white,
                     colorTextoInactivo: const Color(0xFF1B5E20),
@@ -2935,10 +3574,19 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                   _buildBotonMarca(
                     titulo: '🏨 Hotelería',
                     valor: 'Hotelería',
-                    colorActivo: const Color(0xFF1565C0), // Azul Rey
+                    colorActivo: const Color(0xFF1565C0),
                     colorInactivo: const Color(0xFFE3F2FD),
                     colorTextoActivo: Colors.white,
                     colorTextoInactivo: const Color(0xFF0D47A1),
+                  ),
+                  // BOTÓN NEGRO DE TODOS MOVIDO AL FINAL
+                  _buildBotonMarca(
+                    titulo: 'Todos',
+                    valor: 'Todos',
+                    colorActivo: Colors.black,
+                    colorInactivo: Colors.grey.shade100,
+                    colorTextoActivo: Colors.white,
+                    colorTextoInactivo: Colors.black87,
                   ),
                 ],
               ),
@@ -3023,82 +3671,159 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                                   ],
                                 ),
                               ),
-                              Row(
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
-                                    onPressed: cantidad > 0
-                                        ? () {
-                                            setState(() {
-                                              carrito[producto] = cantidad - 1;
-                                              if (carrito[producto] == 0) carrito.remove(producto);
-                                            });
-                                          }
-                                        : null,
-                                  ),
-                                  GestureDetector(
-                                    onTap: () {
-                                      TextEditingController controller = TextEditingController(
-                                        text: cantidad > 0 ? cantidad.toString() : '',
-                                      );
-                                      showDialog(
-                                        context: context,
-                                        builder: (context) {
-                                          return AlertDialog(
-                                            title: Text(producto.nombre),
-                                            content: TextField(
-                                              controller: controller,
-                                              keyboardType: TextInputType.number,
-                                              autofocus: true,
-                                              decoration: InputDecoration(
-                                                labelText: 'Cantidad de unidades',
-                                                hintText: 'Ej: ${producto.unidadesPorBulto > 1 ? producto.unidadesPorBulto : 50}',
-                                                helperText: producto.unidadesPorBulto > 1 ? '1 bulto = ${producto.unidadesPorBulto} unidades' : null,
-                                                border: const OutlineInputBorder(),
-                                              ),
+
+                              // EN HOTELERÍA SE ELIMINAN LOS BOTONES + Y -
+                              if (producto.marca == 'Hotelería')
+                                GestureDetector(
+                                  onTap: () {
+                                    TextEditingController controller = TextEditingController(
+                                      text: cantidad > 0 ? cantidad.toString() : '',
+                                    );
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) {
+                                        return AlertDialog(
+                                          title: Text(producto.nombre),
+                                          content: TextField(
+                                            controller: controller,
+                                            keyboardType: TextInputType.number,
+                                            autofocus: true,
+                                            decoration: const InputDecoration(
+                                              labelText: 'Cantidad de unidades (Mín. 100)',
+                                              hintText: 'Ej: 100, 200, 500...',
+                                              helperText: 'En hotelería se pide por volumen',
+                                              border: OutlineInputBorder(),
                                             ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(context),
-                                                child: const Text('Cancelar'),
-                                              ),
-                                              ElevatedButton(
-                                                onPressed: () {
-                                                  int nuevaCantidad = int.tryParse(controller.text) ?? 0;
-                                                  setState(() {
-                                                    if (nuevaCantidad > 0) {
-                                                      carrito[producto] = nuevaCantidad;
-                                                    } else {
-                                                      carrito.remove(producto);
-                                                    }
-                                                  });
-                                                  Navigator.pop(context);
-                                                },
-                                                child: const Text('Aceptar'),
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      );
-                                    },
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.grey.shade200,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '$cantidad',
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                          ),
+                                          actions: [
+                                            TextButton(
+                                              onPressed: () => Navigator.pop(context),
+                                              child: const Text('Cancelar'),
+                                            ),
+                                            ElevatedButton(
+                                              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1565C0)),
+                                              onPressed: () {
+                                                int nuevaCantidad = int.tryParse(controller.text) ?? 0;
+                                                setState(() {
+                                                  if (nuevaCantidad > 0) {
+                                                    carrito[producto] = nuevaCantidad;
+                                                  } else {
+                                                    carrito.remove(producto);
+                                                  }
+                                                });
+                                                Navigator.pop(context);
+                                              },
+                                              child: const Text('Aceptar', style: TextStyle(color: Colors.white)),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    decoration: BoxDecoration(
+                                      color: cantidad > 0 ? const Color(0xFFE3F2FD) : Colors.grey.shade100,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: cantidad > 0 ? const Color(0xFF1565C0) : Colors.grey.shade400,
+                                        width: 1.5,
                                       ),
                                     ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.edit_note, size: 20, color: cantidad > 0 ? const Color(0xFF1565C0) : Colors.grey.shade700),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          cantidad > 0 ? '$cantidad' : '0',
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: cantidad > 0 ? const Color(0xFF1565C0) : Colors.black87,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.add_circle_outline, color: Colors.green),
-                                    onPressed: () => setState(() => carrito[producto] = cantidad + 1),
-                                  ),
-                                ],
-                              ),
+                                )
+                              else
+                                Row(
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                                      onPressed: cantidad > 0
+                                          ? () {
+                                              setState(() {
+                                                carrito[producto] = cantidad - 1;
+                                                if (carrito[producto] == 0) carrito.remove(producto);
+                                              });
+                                            }
+                                          : null,
+                                    ),
+                                    GestureDetector(
+                                      onTap: () {
+                                        TextEditingController controller = TextEditingController(
+                                          text: cantidad > 0 ? cantidad.toString() : '',
+                                        );
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) {
+                                            return AlertDialog(
+                                              title: Text(producto.nombre),
+                                              content: TextField(
+                                                controller: controller,
+                                                keyboardType: TextInputType.number,
+                                                autofocus: true,
+                                                decoration: InputDecoration(
+                                                  labelText: 'Cantidad de unidades',
+                                                  hintText: 'Ej: ${producto.unidadesPorBulto > 1 ? producto.unidadesPorBulto : 12}',
+                                                  helperText: producto.unidadesPorBulto > 1 ? '1 bulto = ${producto.unidadesPorBulto} unidades' : null,
+                                                  border: const OutlineInputBorder(),
+                                                ),
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(context),
+                                                  child: const Text('Cancelar'),
+                                                ),
+                                                ElevatedButton(
+                                                  onPressed: () {
+                                                    int nuevaCantidad = int.tryParse(controller.text) ?? 0;
+                                                    setState(() {
+                                                      if (nuevaCantidad > 0) {
+                                                        carrito[producto] = nuevaCantidad;
+                                                      } else {
+                                                        carrito.remove(producto);
+                                                      }
+                                                    });
+                                                    Navigator.pop(context);
+                                                  },
+                                                  child: const Text('Aceptar'),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade200,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          '$cantidad',
+                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline, color: Colors.green),
+                                      onPressed: () => setState(() => carrito[producto] = cantidad + 1),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),
@@ -3162,7 +3887,7 @@ class _CatalogoScreenState extends State<CatalogoScreen> {
                             : Text(
                                 cumpleMinimo
                                     ? 'GENERAR PEDIDO Y PDF'
-                                    : 'Faltan ${12 - totalUnidades} unidades (Min. 12)',
+                                    : 'Faltan ${12 - unidadesSoeEnCarrito} und. de SOE (Mín. 12)',
                                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
                               ),
                       ),
